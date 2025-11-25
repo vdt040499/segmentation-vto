@@ -1,0 +1,5 @@
+gradio==4.x
+numpy
+opencv-python
+ultralytics
+torch>=2.0,<3.0
