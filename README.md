@@ -1,3 +1,14 @@
+---
+title: Segmentation for Virtual Try-On
+emoji: 🎨
+colorFrom: violet
+colorTo: cyan
+sdk: gradio
+sdk_version: 4.0
+app_file: app.py
+pinned: false
+---
+
 # Segmentation for Virtual Try-On
 
 Ứng dụng web phân đoạn người (Human Parsing) sử dụng YOLO segmentation model, được thiết kế cho ứng dụng Virtual Try-On. Ứng dụng được xây dựng với Gradio và có thể chạy trên Hugging Face Spaces.
