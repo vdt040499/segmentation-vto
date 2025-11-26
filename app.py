@@ -812,8 +812,6 @@ def segment_image(model_file, image_file):
 
 with gr.Blocks(
     title="Segmentation for Virtual Try-On",
-    theme=CUSTOM_THEME,
-    css=CUSTOM_CSS,
 ) as demo:
     gr.HTML(
         """
@@ -867,5 +865,8 @@ if __name__ == "__main__":
     demo.launch(
         server_name="0.0.0.0",
         server_port=int(os.environ.get("PORT", 7860)),
-        share=False,)
+        share=False,
+        theme=CUSTOM_THEME,
+        css=CUSTOM_CSS,
+    )
 
