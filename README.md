@@ -1,8 +1,8 @@
 ---
 title: Segmentation for Virtual Try-On
 emoji: 🎨
-colorFrom: violet
-colorTo: cyan
+colorFrom: purple
+colorTo: blue
 sdk: gradio
 sdk_version: 4.0
 app_file: app.py
