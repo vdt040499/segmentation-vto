@@ -7,6 +7,7 @@ from typing import Dict, List, Optional, Tuple
 import cv2
 import gradio as gr
 import numpy as np
+from ultralytics import YOLO
 
 from human_parsing import Human_Parsing
 
@@ -25,9 +26,8 @@ def load_model(model_path: str) -> Optional[Human_Parsing]:
 
     try:
         parser.model_path = model_path
-        parser.human_parsing_model = parser.human_parsing_model.__class__(
-            model_path, task="segment"
-        )
+        parser.human_parsing_model = YOLO(model_path, task="segment")
+        parser.result_template = {key: [] for key in parser.human_parsing_model.names.values()}
         return parser
     except Exception as exc:
         raise RuntimeError(f"Cannot load YOLO model from {model_path}: {exc}") from exc

@@ -29,19 +29,38 @@ class Human_Parsing():
             root_model_path = os.path.join(os.getcwd(), "human_parsing_11l.pt")
             default_model_path = os.path.join(os.getcwd(), "./models/human_parsing", "human_parsing_11l.pt")
             
+            # Initialize model as None - will be loaded when needed
+            self.human_parsing_model = None
+            self.model_path = None
+            self.result_template = {}
+            
+            # Try to find and load default model if it exists
             if os.path.exists(root_model_path):
                 self.model_path = root_model_path
+                try:
+                    self.human_parsing_model = YOLO(self.model_path, task = "segment")
+                    self.result_template = {key: [] for key in self.human_parsing_model.names.values()}
+                    print(f"MODEL LOADED: {self.model_path}")
+                except Exception as e:
+                    print(f"WARNING: Could not load model from {self.model_path}: {e}")
+                    self.model_path = None
+                    self.human_parsing_model = None
             elif os.path.exists(default_model_path):
                 self.model_path = default_model_path
+                try:
+                    self.human_parsing_model = YOLO(self.model_path, task = "segment")
+                    self.result_template = {key: [] for key in self.human_parsing_model.names.values()}
+                    print(f"MODEL LOADED: {self.model_path}")
+                except Exception as e:
+                    print(f"WARNING: Could not load model from {self.model_path}: {e}")
+                    self.model_path = None
+                    self.human_parsing_model = None
             else:
-                self.model_path = root_model_path  # Will try to load anyway
-            
-            print(f"MODEL PATH: {self.model_path }")
-            self.human_parsing_model = YOLO(self.model_path, task = "segment")
-
-            self.result_template = {key: [] for key in self.human_parsing_model.names.values()}
+                print("WARNING: No default model found. Please upload a model file.")
     
     def detect_cloth(self, frame, iou = 0.7, conf = 0.3):
+        if self.human_parsing_model is None:
+            raise ValueError("Model not loaded. Please load a model first.")
         result = self.human_parsing_model.predict(frame, iou = iou, conf = conf, verbose = False)[0].cpu()
 
         boxes = result.boxes
@@ -71,6 +90,8 @@ class Human_Parsing():
         return mask
     
     def detect_category(self, frame, iou = 0.7, conf = 0.3):
+        if self.human_parsing_model is None:
+            raise ValueError("Model not loaded. Please load a model first.")
         result = self.human_parsing_model.predict(frame, iou = iou, conf = conf, verbose = False)[0].cpu()
 
         labels = ""
