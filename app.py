@@ -13,6 +13,7 @@ from human_parsing import Human_Parsing
 
 
 def load_model(model_path: str) -> Optional[Human_Parsing]:
+    """Load (or reuse) a YOLO checkpoint and refresh shared parser state."""
     parser = Human_Parsing.getInstance()
     if not model_path:
         return parser
@@ -60,6 +61,7 @@ PRESET_CLASS_COLORS = {
 
 
 def resolve_file_path(file_input) -> str:
+    """Normalize Gradio upload values to an absolute path string."""
     if file_input is None:
         return ""
     if isinstance(file_input, str):
@@ -68,6 +70,7 @@ def resolve_file_path(file_input) -> str:
 
 
 def hex_to_bgr(color_hex: str) -> Tuple[int, int, int]:
+    """Convert hex color strings into OpenCV-friendly BGR tuples."""
     color = color_hex.lstrip("#")
     r = int(color[0:2], 16)
     g = int(color[2:4], 16)
@@ -76,6 +79,7 @@ def hex_to_bgr(color_hex: str) -> Tuple[int, int, int]:
 
 
 def color_for_class(class_name: str) -> Tuple[str, Tuple[int, int, int]]:
+    """Pick a stable accent color per class, falling back to a hash palette."""
     normalized = class_name.lower().strip()
     if normalized in PRESET_CLASS_COLORS:
         hex_color = PRESET_CLASS_COLORS[normalized]
@@ -87,6 +91,7 @@ def color_for_class(class_name: str) -> Tuple[str, Tuple[int, int, int]]:
 
 
 def collect_segments(result, image_shape: Tuple[int, int], class_names: Dict[int, str]):
+    """Merge YOLO masks per class and compute stats used by the UI layer."""
     h, w = image_shape
     boxes = getattr(result, "boxes", None)
     masks = getattr(result, "masks", None)
@@ -116,6 +121,7 @@ def collect_segments(result, image_shape: Tuple[int, int], class_names: Dict[int
         ymax = max(0, min(h, int(y2)))
 
         hex_color, bgr_color = color_for_class(class_name)
+        # Merge every detection of the same class so the UI shows one layer.
         entry = segments.setdefault(
             class_name,
             {
@@ -177,6 +183,7 @@ def collect_segments(result, image_shape: Tuple[int, int], class_names: Dict[int
 
 
 def blend_overlay(image: np.ndarray, segments: List[Dict[str, object]]) -> np.ndarray:
+    """Create a colorized overlay so each segment pops without hiding texture."""
     if not segments:
         return image.copy()
 
@@ -195,6 +202,7 @@ def blend_overlay(image: np.ndarray, segments: List[Dict[str, object]]) -> np.nd
 
 
 def encode_image_to_base64(image_bgr: np.ndarray) -> str:
+    """Compress an OpenCV image into a base64 PNG for embedding in HTML."""
     success, buffer = cv2.imencode(".png", image_bgr)
     if not success:
         raise RuntimeError("Không thể mã hóa ảnh overlay.")
@@ -206,6 +214,7 @@ def encode_segment_crop(
     box: List[int],
     color_bgr: Tuple[int, int, int],
 ) -> Optional[str]:
+    """Crop a mask to its bounding box and turn it into an RGBA glow layer."""
     if mask is None or mask.max() == 0:
         return None
 
@@ -224,6 +233,7 @@ def encode_segment_crop(
     if binary.max() == 0:
         return None
 
+    # Blur + distance transform creates a feathered alpha that blends smoothly.
     soft_mask = cv2.GaussianBlur(binary * 255, (0, 0), sigmaX=3.0, sigmaY=3.0)
     dist_map = cv2.distanceTransform(binary, cv2.DIST_L2, 5)
     if dist_map.max() > 0:
@@ -249,6 +259,7 @@ def encode_segment_crop(
             thickness=thickness,
             lineType=cv2.LINE_AA,
         )
+        # Slight blur softens the contour so the glow looks less jagged.
         outline = cv2.GaussianBlur(outline, (0, 0), sigmaX=1.0, sigmaY=1.0)
         outline = np.clip(outline * 1.35, 0, 255).astype(np.uint8)
 
@@ -289,6 +300,7 @@ def build_overlay_html(
     segments: List[Dict[str, object]],
     empty_message: Optional[str] = None,
 ) -> str:
+    """Assemble the HTML fragment that layers masks, tags, and legend chips."""
     height, width = overlay_bgr.shape[:2]
     image_b64 = encode_image_to_base64(overlay_bgr)
 
@@ -370,6 +382,7 @@ def build_empty_state_html(
     title: str = "No result",
     subtitle: str = "Upload an image and model to start segmentation.",
 ) -> str:
+    """Reusable placeholder shown before inference or when errors occur."""
     return f"""
     <div class="seg-empty">
         <div class="seg-empty__icon">🌀</div>
@@ -766,11 +779,13 @@ body {
 """
 
 def segment_image(model_file, image_file):
+    """Gradio callback that validates inputs, runs YOLO, and renders markup."""
     if image_file is None:
         return build_empty_state_html(
             "No image uploaded", "Upload an image in the left panel and click Segment Now."
         )
 
+    # Swap in the uploaded model (if any) while reusing the shared singleton.
     parser = load_model(resolve_file_path(model_file))
     if parser is None:
         return build_empty_state_html(
@@ -796,6 +811,7 @@ def segment_image(model_file, image_file):
             "Model running failed", f"Details: {exc}"
         )
 
+    # Translate raw YOLO tensors into merged masks + stats for front-end widgets.
     segments = collect_segments(
         result,
         image.shape[:2],

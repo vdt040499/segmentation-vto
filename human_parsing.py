@@ -1,3 +1,9 @@
+"""Lightweight wrapper around a YOLO human-parsing checkpoint.
+
+This module isolates model discovery/loading and exposes helper methods that
+return reusable masks/crops for downstream virtual try-on stages.
+"""
+
 import sys
 import os
 
@@ -10,6 +16,8 @@ parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.append(parent_dir)
 
 class Human_Parsing():
+    """Singleton wrapper that keeps one YOLO model instance per process."""
+
     __instance__ = None  
 
     @staticmethod
@@ -25,7 +33,8 @@ class Human_Parsing():
         else:
             Human_Parsing.__instance__ = self  # Assign the instance to the class variable
 
-            # Load pretrained model - check multiple locations
+            # Load pretrained model - check multiple locations so the same build
+            # works locally, inside Docker, or on Hugging Face Spaces.
             root_model_path = os.path.join(os.getcwd(), "human_parsing_11l.pt")
             default_model_path = os.path.join(os.getcwd(), "./models/human_parsing", "human_parsing_11l.pt")
             
@@ -39,6 +48,8 @@ class Human_Parsing():
                 self.model_path = root_model_path
                 try:
                     self.human_parsing_model = YOLO(self.model_path, task = "segment")
+                    # Each class keeps its own accumulator so downstream merges
+                    # can reuse the same structure as in app.py.
                     self.result_template = {key: [] for key in self.human_parsing_model.names.values()}
                     print(f"MODEL LOADED: {self.model_path}")
                 except Exception as e:
@@ -59,6 +70,7 @@ class Human_Parsing():
                 print("WARNING: No default model found. Please upload a model file.")
     
     def detect_cloth(self, frame, iou = 0.7, conf = 0.3):
+        """Return a binary clothing mask, ignoring arm/leg classes."""
         if self.human_parsing_model is None:
             raise ValueError("Model not loaded. Please load a model first.")
         result = self.human_parsing_model.predict(frame, iou = iou, conf = conf, verbose = False)[0].cpu()
@@ -90,12 +102,15 @@ class Human_Parsing():
         return mask
     
     def detect_category(self, frame, iou = 0.7, conf = 0.3):
+        """Return YOLO label text plus per-category crops/masks."""
         if self.human_parsing_model is None:
             raise ValueError("Model not loaded. Please load a model first.")
         result = self.human_parsing_model.predict(frame, iou = iou, conf = conf, verbose = False)[0].cpu()
 
-        labels = ""
+        labels = ""  # YOLO label file string, reused by collaborators that need polygons
 
+        # Pre-allocate slot for each body region so downstream consumers always
+        # receive the same schema even when a class is absent in the frame.
         template_result = {
             "lowerbody":{
                 "image": None,
@@ -144,7 +159,7 @@ class Human_Parsing():
                 labels = labels + f" {x} {y}"
             labels += "\n"
 
-        area_threshold = 0.1
+        area_threshold = 0.1  # drop noisy detections that cover <10% of the frame
         frame_area = frame.shape[0] * frame.shape[1]
 
         for key in template_result.keys():
@@ -164,7 +179,7 @@ class Human_Parsing():
                 # xmin, ymin, xmax, ymax = template_result[key]["box"]
                 # cropped_img = masked_img[ymin:ymax, xmin:xmax]
 
-                cropped_img = img[ymin:ymax, xmin:xmax]
+                cropped_img = img[ymin:ymax, xmin:xmax]  # Keep raw RGB patches for virtual try-on preview
 
                 template_result[key]["image"] = cropped_img
 
